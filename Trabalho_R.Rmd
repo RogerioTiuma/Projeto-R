@@ -1,0 +1,92 @@
+---
+title: "Avaliação de Commodities"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyquant)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(shiny)
+library(lubridate) 
+
+#Coleta de dados
+Cobre<-data.frame(read.csv("Cobre.csv",sep=","))  %>% mutate(steel = rep("Cobre"))
+Ouro<-data.frame(read.csv("Ouro.csv",sep=",")) %>% mutate(steel = rep("Ouro"))
+Prata<-data.frame(read.csv("Prata.csv",sep=",")) %>% mutate(steel = rep("Prata"))
+Platina<-data.frame(read.csv("Platina.csv",sep=",")) %>% mutate(steel = rep("Platina"))
+
+
+#Tratamento dos números obtidos nas tabelas de commodities obtidas
+Steels <- bind_rows(Cobre, Ouro, Prata, Platina) %>% mutate(Data = dmy(Data)) %>% rename(Fechamento = Ultimo, Volume = Vol., Variação = Var.) %>% mutate(Fechamento= as.numeric(gsub(",", ".", gsub("\\.","",Fechamento))),Variação= as.numeric(gsub(",", ".", gsub("\\%","",Variação))), Minima= as.numeric(gsub(",", ".", gsub("\\.","",Minima))), Maxima= as.numeric(gsub(",", ".", gsub("\\.","",Maxima))),Abertura= as.numeric(gsub(",", ".", gsub("\\.","",Abertura))))
+
+#Tabela para agrupamento de datas
+tabela_periodo <- data.frame(periodo = c("1M","6M","1A","5A","10A"),dias = c(30,180,365,1825,3650))
+
+#Tabela para definição de cores do gráfico
+colours = c("Cobre"= "orange","Ouro" = "yellow","Prata" = "gray","Platina"="cyan")
+
+
+
+
+```
+Columm{.sidebar}
+-----------------------------------------------------------------------
+```{r}
+
+selectInput(inputId = "commoditie", label = "Escolha o Commodity", choices = c("Ouro", "Cobre", "Prata", "Platina"), selected = "Cobre")
+
+selectInput(inputId = "periodo", label = "Escolha o período", choices = c("1M", "6M", "1A", "5A", "10A"), selected = "10A")
+
+selectInput(inputId = "variavel", label = "Escolha o parâmetro", choices = c("Fechamento", "Abertura", "Maxima","Minima", "Volume", "Variação", "steel"), selected = "Fechamento")
+
+
+```
+
+Row {data-width=650}
+-----------------------------------------------------------------------
+
+### Todas as Tedência Individual
+
+```{r}
+
+
+renderPlotly({periodo <- Sys.Date() - filter(tabela_periodo, periodo == input$periodo)$dias
+
+Steels %>% filter(Data >= periodo) %>% ggplot() + aes(x= Data, y = !!sym(input$variavel), color = steel)+ scale_color_manual(values = colours) + geom_line(size = 1.1) + labs(x= "", y = "Cotação", color = "steel") + ggtitle(label = input$variavel) + theme(panel.background = element_blank(), plot.title = element_text(size = 22)) })
+
+
+```
+
+
+### Tendência Individual
+
+```{r}
+
+renderPlotly({periodo <- Sys.Date() - filter(tabela_periodo, periodo == input$periodo)$dias
+
+Steels %>% filter(Data >= periodo, steel == input$commoditie) %>% ggplot() + aes(x= Data, y = !!sym(input$variavel),color = steel) + scale_color_manual(values = colours) + geom_line() + labs(x= "", y = "Cotação") + ggtitle(label = input$commoditie) + theme(panel.background = element_blank(), plot.title = element_text(size = 22),legend.position = "none") })
+
+
+```
+
+Row {data-width=500}
+-----------------------------------------------------------------------
+### Tabela de Variações
+
+```{r}
+renderDataTable({periodo <- Sys.Date() - filter(tabela_periodo, periodo == input$periodo)$dias
+
+Steels %>% filter(Data >= periodo, steel == input$commoditie) %>% mutate(across(where(is.double),round,digits=2)) %>% arrange(desc(abs(Variação))) %>% datatable(rownames = FALSE)
+
+})
+
+```
+
